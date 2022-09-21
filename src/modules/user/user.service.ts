@@ -46,8 +46,11 @@ export class UserService {
       .getManyAndCount();
   }
 
-  findOne(id: number) {
-    return this.userRepository.findOne({ where: { id } });
+  async findOne(id: number) {
+    return this.userRepository.createQueryBuilder('user')
+      .where('user.id = :id', { id })
+      .andWhere(`user.status != ${ EntityStatus.DELETED }`)
+      .getOne();
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
@@ -61,6 +64,7 @@ export class UserService {
 
   async remove(id: number) {
     const user = await this.findOne(id);
+    this.checkUserExist(id, user);
     user.status = EntityStatus.DELETED;
     return await this.userRepository.save(user);
   }
