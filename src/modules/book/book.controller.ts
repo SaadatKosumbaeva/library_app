@@ -1,9 +1,10 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { ApiParam, ApiQuery } from '@nestjs/swagger';
 import { BookService } from './book.service';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
-import { ApiParam, ApiQuery } from '@nestjs/swagger';
 import { QueryParams } from '../../shared/interfaces/query-params.interface';
+import { UpdateUserDto } from '../user/dto/update-user.dto';
 
 @Controller('book')
 export class BookController {
@@ -37,9 +38,15 @@ export class BookController {
     return this.bookService.update(id, updateBookDto);
   }
 
+  @Patch('favorite/:bookId')
+  @ApiParam({ type: Number, name: 'bookId' })
+  addToFavourite(@Param('bookId', ParseIntPipe) bookId: number, @Body() updateUserDto: UpdateUserDto) {
+    return this.bookService.addToFavorite(bookId, updateUserDto);
+  }
+
   @Delete(':id')
   @ApiParam({ type: Number, name: 'id' })
-  remove(@Param('id') id: string) {
-    return this.bookService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.bookService.remove(id);
   }
 }

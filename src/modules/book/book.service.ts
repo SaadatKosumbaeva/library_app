@@ -1,23 +1,29 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
-import { InjectRepository } from '@nestjs/typeorm';
 import { Book } from '../../entities/book.entity';
-import { Repository } from 'typeorm';
 import { QueryParams } from '../../shared/interfaces/query-params.interface';
 import { SortType } from '../../shared/types/sort-type';
 import { EntityStatus } from '../../shared/types/entity-status';
+import { UpdateUserDto } from '../user/dto/update-user.dto';
+import { UserService } from '../user/user.service';
 
 @Injectable()
 export class BookService {
   constructor(@InjectRepository(Book)
-              private readonly bookRepository: Repository<Book>) {
+              private readonly bookRepository: Repository<Book>,
+              private readonly userService: UserService) {
   }
 
   async create(createBookDto: CreateBookDto) {
+    const existBook = await this.getByMultipleParameters(createBookDto);
+
+    if (existBook) throw new HttpException('The book already exist', HttpStatus.CONFLICT);
+
     const book = await this.bookRepository.create(createBookDto);
-    await this.bookRepository.manager.save(book);
-    return book;
+    return this.bookRepository.save(book);
   }
 
   async findAll({ name = '', take = 10, page = 1, dateFrom, dateTo, sortType = SortType.DESC }: QueryParams) {
@@ -47,32 +53,48 @@ export class BookService {
   }
 
   async findOne(id: number) {
-    return this.bookRepository.createQueryBuilder('book')
+    const book = await this.bookRepository.createQueryBuilder('book')
       .where('book.id = :id', { id })
       .andWhere(`book.status != ${ EntityStatus.DELETED }`)
+      .getOne();
+
+    if (!book) {
+      throw new NotFoundException(`Book by id = ${ id } not found`);
+    }
+    return book;
+  }
+
+  async getByMultipleParameters(createBookDto: CreateBookDto) {
+    return this.bookRepository.createQueryBuilder('book')
+      .where('book.title = :title', { title: createBookDto.title })
+      .andWhere('book.author = :author', { author: createBookDto.author })
       .getOne();
   }
 
   async update(id: number, updateBookDto: UpdateBookDto) {
     const book = await this.findOne(id);
-
-    this.checkBookExist(id, book);
-
     const updatedBookData = await this.bookRepository.merge(book, updateBookDto);
-    return this.bookRepository.manager.save(updatedBookData);
+    return this.bookRepository.save(updatedBookData);
+  }
+
+  async addToFavorite(bookId: number, updateUserDto: UpdateUserDto) {
+    const book = await this.findOne(bookId);
+    const user = await this.userService.findOne(updateUserDto.userId);
+
+    const existBook = user.books.find(b => b.id === bookId);
+
+    if (existBook) {
+      user.books = user.books.filter(b => b.id !== bookId);
+      return this.userService.save(user);
+    }
+
+    user.books.push(book);
+    return this.userService.save(user);
   }
 
   async remove(id: number) {
     const book = await this.findOne(id);
-    await this.checkBookExist(id, book);
     book.status = EntityStatus.DELETED;
-    return this.bookRepository.manager.save(book);
-  }
-
-  checkBookExist(id: number, book: Book) {
-    if (!book) {
-      throw new NotFoundException(`Book by id = ${ id } not found`);
-    }
-    return book;
+    return this.bookRepository.save(book);
   }
 }

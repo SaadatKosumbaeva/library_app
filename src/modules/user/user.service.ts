@@ -16,7 +16,7 @@ export class UserService {
 
   async create(createUserDto: CreateUserDto) {
     const user = await this.userRepository.create(createUserDto);
-    await this.userRepository.manager.save(user);
+    await this.userRepository.save(user);
     return user;
   }
 
@@ -25,6 +25,7 @@ export class UserService {
     const skip = page === 1 ? 0 : (page - 1) * take;
     const query = this.userRepository.createQueryBuilder('user')
       .orderBy('user.createdAt', sortType)
+      .leftJoinAndSelect('user.books', 'book')
       .andWhere(`user.status != ${ EntityStatus.DELETED }`);
 
     if (preparedName) {
@@ -47,24 +48,23 @@ export class UserService {
   }
 
   async findOne(id: number) {
-    return this.userRepository.createQueryBuilder('user')
+    const user = await this.userRepository.createQueryBuilder('user')
       .where('user.id = :id', { id })
       .andWhere(`user.status != ${ EntityStatus.DELETED }`)
+      .leftJoinAndSelect('user.books', 'book')
       .getOne();
+
+    return this.checkUserExist(id, user);
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
     const user = await this.findOne(id);
-
-    this.checkUserExist(id, user);
-
     const updatedUserData = await this.userRepository.merge(user, updateUserDto);
-    return this.userRepository.manager.save(updatedUserData);
+    return this.userRepository.save(updatedUserData);
   }
 
   async remove(id: number) {
     const user = await this.findOne(id);
-    this.checkUserExist(id, user);
     user.status = EntityStatus.DELETED;
     return await this.userRepository.save(user);
   }
@@ -74,5 +74,9 @@ export class UserService {
       throw new NotFoundException(`User by id = ${ id } not found`);
     }
     return user;
+  }
+
+  save(user: User) {
+    return this.userRepository.save(user);
   }
 }

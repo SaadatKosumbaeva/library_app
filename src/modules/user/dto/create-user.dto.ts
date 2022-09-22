@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @MinLength(2, {
@@ -14,6 +14,9 @@ export class CreateUserDto {
   lastName: string;
 
   @IsInt()
+  @Min(0, {
+    message: 'Age should not be a negative number',
+  })
   age: number;
 
   @IsBoolean()
